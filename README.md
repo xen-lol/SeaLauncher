@@ -19,7 +19,7 @@ Game detection can depend on the platform and where a game is installed. If a ga
 
 - Windows 10 or Windows 11
 
-## Making Your Own Requires the things below
+### Making Your Own Requires the things below
 - .NET 8
 
 
