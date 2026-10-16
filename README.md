@@ -18,8 +18,10 @@ Game detection can depend on the platform and where a game is installed. If a ga
 ## Requirements
 
 - Windows 10 or Windows 11
+
+## Making Your Own Requires the things below
 - .NET 8
-------------------------------- IF UR MAKING YOUR OWN, THIS IS REQUIRED.
+
 
 - Visual Studio 2022 with the **.NET desktop development** workload, or the .NET CLI
 
