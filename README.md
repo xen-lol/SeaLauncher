@@ -46,7 +46,7 @@ If you plan to publish or distribute your own version, please DM me on Discord a
 Sea Launcher stores local data under `%AppData%\SeaLauncher`:
 
 - `library.json` — your library entries and preferences
-- `covers\` — custom cover images
+- `covers\` — custom cover images (this will only show if you change the cover from the app)
 - `error.log` — unexpected UI errors
 
 ## Project structure
