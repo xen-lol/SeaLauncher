@@ -86,10 +86,12 @@ namespace SeaLauncher
             PreviewKeyDown += OnPreviewKeyDown;
             PreviewMouseWheel += (s, e) => MenuPopup.CloseCurrent();
             DragEnter += OnWindowDragEnter;
+            Closed += (s, e) => DiscordPresence.Stop();
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            DiscordPresence.Start();
             await RescanAsync(true);
         }
 
@@ -171,6 +173,9 @@ namespace SeaLauncher
             AddNav(nav, NavFilter.Epic, "Epic Games", Logos.Badge(Platform.Epic, 22));
             AddNav(nav, NavFilter.Xbox, "Xbox", Logos.Badge(Platform.Xbox, 22));
             AddNav(nav, NavFilter.Gog, "GOG", Logos.Badge(Platform.Gog, 22));
+            AddNav(nav, NavFilter.Ubisoft, "Ubisoft Connect", Logos.Badge(Platform.Ubisoft, 22));
+            AddNav(nav, NavFilter.Ea, "EA app", Logos.Badge(Platform.Ea, 22));
+            AddNav(nav, NavFilter.BattleNet, "Battle.net", Logos.Badge(Platform.BattleNet, 22));
             AddNav(nav, NavFilter.Imported, "Imported", Logos.Badge(Platform.Imported, 22));
             nav.Children.Add(new Border { Height = 10 });
             AddNav(nav, NavFilter.Hidden, "Hidden", Logos.Glyph("\uED1A", 16, Theme.Muted));
@@ -575,6 +580,9 @@ namespace SeaLauncher
                 case NavFilter.Epic: return "Epic Games";
                 case NavFilter.Xbox: return "Xbox";
                 case NavFilter.Gog: return "GOG";
+                case NavFilter.Ubisoft: return "Ubisoft Connect";
+                case NavFilter.Ea: return "EA app";
+                case NavFilter.BattleNet: return "Battle.net";
                 case NavFilter.Imported: return "Imported";
                 case NavFilter.Hidden: return "Hidden Games";
                 default: return "All Games";
@@ -625,6 +633,15 @@ namespace SeaLauncher
                         break;
                     case NavFilter.Gog:
                         if (game.Platform != Platform.Gog) return false;
+                        break;
+                    case NavFilter.Ubisoft:
+                        if (game.Platform != Platform.Ubisoft) return false;
+                        break;
+                    case NavFilter.Ea:
+                        if (game.Platform != Platform.Ea) return false;
+                        break;
+                    case NavFilter.BattleNet:
+                        if (game.Platform != Platform.BattleNet) return false;
                         break;
                     case NavFilter.Imported:
                         if (game.Platform != Platform.Imported) return false;
@@ -697,7 +714,7 @@ namespace SeaLauncher
             }
 
             UpdateCounts();
-            countText.Text = list.Count == 1 ? "1 game" : list.Count + " games\n\nthe default path for games from Epic Games should be %USERPROFILE%\\Epic Games\nThe fortnite path can be found at C:\\Program Files\\Epic Games.";
+            countText.Text = list.Count == 1 ? "1 game" : list.Count + " games\nif your Epic Games installation path is different from SeaLaunchers set one,\nit will not launch any games from Epic Games";
 
             if (list.Count == 0)
             {
@@ -739,7 +756,7 @@ namespace SeaLauncher
                     break;
                 case NavFilter.All:
                     emptyTitle.Text = scanning ? "Looking for your games" : "Your library is empty";
-                    emptyHint.Text = "Install games on Steam, Epic, Xbox or GOG,\nor drop an .exe here to add it yourself.";
+                    emptyHint.Text = "Install games on Steam, Epic, Xbox, GOG, Ubisoft, EA or Battle.net,\nor drop an .exe here to add it yourself.";
                     break;
                 default:
                     emptyTitle.Text = "No " + TitleFor(filter) + " games found";
@@ -750,7 +767,7 @@ namespace SeaLauncher
 
         private void UpdateCounts()
         {
-            int all = 0, favorites = 0, recent = 0, steam = 0, epic = 0, xbox = 0, gog = 0, imported = 0, hidden = 0;
+            int all = 0, favorites = 0, recent = 0, steam = 0, epic = 0, xbox = 0, gog = 0, ubisoft = 0, ea = 0, battleNet = 0, imported = 0, hidden = 0;
             foreach (GameCard card in cards)
             {
                 Game game = card.Game;
@@ -768,6 +785,9 @@ namespace SeaLauncher
                     case Platform.Epic: epic++; break;
                     case Platform.Xbox: xbox++; break;
                     case Platform.Gog: gog++; break;
+                    case Platform.Ubisoft: ubisoft++; break;
+                    case Platform.Ea: ea++; break;
+                    case Platform.BattleNet: battleNet++; break;
                     default: imported++; break;
                 }
             }
@@ -779,8 +799,12 @@ namespace SeaLauncher
             SetCount(NavFilter.Epic, epic);
             SetCount(NavFilter.Xbox, xbox);
             SetCount(NavFilter.Gog, gog);
+            SetCount(NavFilter.Ubisoft, ubisoft);
+            SetCount(NavFilter.Ea, ea);
+            SetCount(NavFilter.BattleNet, battleNet);
             SetCount(NavFilter.Imported, imported);
             SetCount(NavFilter.Hidden, hidden);
+            DiscordPresence.SetLibraryCount(all);
         }
 
         private void SetCount(NavFilter target, int value)
@@ -868,7 +892,10 @@ namespace SeaLauncher
                 Task.Run(() => Safe(SteamScanner.Scan)),
                 Task.Run(() => Safe(EpicScanner.Scan)),
                 Task.Run(() => Safe(XboxScanner.Scan)),
-                Task.Run(() => Safe(GogScanner.Scan))
+                Task.Run(() => Safe(GogScanner.Scan)),
+                Task.Run(() => Safe(UbisoftScanner.Scan)),
+                Task.Run(() => Safe(EaScanner.Scan)),
+                Task.Run(() => Safe(BattleNetScanner.Scan))
             };
             Task.WaitAll(tasks);
 
@@ -989,6 +1016,7 @@ namespace SeaLauncher
                 Library.Save(state);
                 ShowToast("Launching " + game.Name);
                 UpdateCounts();
+                DiscordPresence.GameLaunched(game);
             }
             else
             {

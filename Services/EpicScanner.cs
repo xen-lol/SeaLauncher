@@ -44,19 +44,17 @@ namespace SeaLauncher.Services
                         if (game != null && seen.Add(game.Id))
                         {
                             result.Add(game);
-                            if (!string.IsNullOrWhiteSpace(game.InstallDir)) seenInstallDirs.Add(game.InstallDir);
+                            if (!string.IsNullOrWhiteSpace(game.InstallDir)) seenInstallDirs.Add(NormalizeDir(game.InstallDir));
                         }
                     }
                     catch (IOException)
                     {
-                        // Epic may update a manifest while a scan is running.
                     }
                     catch (UnauthorizedAccessException)
                     {
                     }
                     catch (JsonException)
                     {
-                        // Ignore a malformed or partially-written manifest.
                     }
                     catch (ArgumentException)
                     {
@@ -85,11 +83,16 @@ namespace SeaLauncher.Services
                     try
                     {
                         string name = Path.GetFileName(gameDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                        if (string.IsNullOrWhiteSpace(name) || name.Equals(".egstore", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (string.IsNullOrWhiteSpace(name) || IsIgnoredFolder(name)) continue;
 
-                        string exe = FindLaunchExecutable(gameDir, name);
-                        string id = "epic-folder:" + gameDir;
-                        if (!seenInstallDirs.Contains(gameDir) && seen.Add(id))
+                        string normalized = NormalizeDir(gameDir);
+                        if (seenInstallDirs.Contains(normalized)) continue;
+
+                        string exe = ExeFinder.Find(gameDir, name);
+                        if (exe == null) continue;
+
+                        string id = "epic-folder:" + normalized;
+                        if (seen.Add(id))
                         {
                             result.Add(new Game
                             {
@@ -121,49 +124,48 @@ namespace SeaLauncher.Services
             AddCandidate(roots, Path.Combine(programFiles, "Epic Games"));
             AddCandidate(roots, Path.Combine(programFilesX86, "Epic Games"));
             AddCandidate(roots, Path.Combine(userProfile, "Epic Games"));
+            try
+            {
+                foreach (DriveInfo drive in DriveInfo.GetDrives())
+                {
+                    if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
+                    AddCandidate(roots, Path.Combine(drive.RootDirectory.FullName, "Epic Games"));
+                    AddCandidate(roots, Path.Combine(drive.RootDirectory.FullName, "Program Files", "Epic Games"));
+                }
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+            }
             return roots;
         }
 
-        private static string FindLaunchExecutable(string gameDir, string gameName)
+        private static bool IsIgnoredFolder(string name)
         {
-            var queue = new Queue<Tuple<string, int>>();
-            queue.Enqueue(Tuple.Create(gameDir, 0));
-            string fallback = null;
-            int visited = 0;
-            while (queue.Count > 0 && visited < 500)
+            string[] ignored =
             {
-                var current = queue.Dequeue();
-                visited++;
-                string[] exes;
-                try { exes = Directory.GetFiles(current.Item1, "*.exe", SearchOption.TopDirectoryOnly); }
-                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { exes = Array.Empty<string>(); }
-
-                foreach (string exe in exes)
+                ".egstore", "Launcher", "Portal", "Engine", "DirectXRedist", "Epic Online Services",
+                "Download", "Cache", "Prerequisites", "UnrealEngineLauncher"
+            };
+            foreach (string entry in ignored)
+            {
+                if (name.Equals(entry, StringComparison.OrdinalIgnoreCase))
                 {
-                    string fileName = Path.GetFileName(exe);
-                    if (fileName.IndexOf(gameName, StringComparison.OrdinalIgnoreCase) >= 0) return exe;
-                    if (fallback == null && !fileName.Contains("Uninstall", StringComparison.OrdinalIgnoreCase) &&
-                        !fileName.Contains("CrashReport", StringComparison.OrdinalIgnoreCase) &&
-                        !fileName.Contains("Prereq", StringComparison.OrdinalIgnoreCase) &&
-                        !fileName.Contains("EasyAntiCheat", StringComparison.OrdinalIgnoreCase) &&
-                        !fileName.Contains("BattlEye", StringComparison.OrdinalIgnoreCase)) fallback = exe;
-                }
-
-                if (current.Item2 >= 5) continue;
-                string[] children;
-                try { children = Directory.GetDirectories(current.Item1, "*", SearchOption.TopDirectoryOnly); }
-                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { continue; }
-                foreach (string child in children)
-                {
-                    string leaf = Path.GetFileName(child);
-                    if (leaf.Equals(".egstore", StringComparison.OrdinalIgnoreCase) ||
-                        leaf.Equals("Engine", StringComparison.OrdinalIgnoreCase) ||
-                        leaf.Equals("Redist", StringComparison.OrdinalIgnoreCase) ||
-                        leaf.Equals("Prerequisites", StringComparison.OrdinalIgnoreCase)) continue;
-                    queue.Enqueue(Tuple.Create(child, current.Item2 + 1));
+                    return true;
                 }
             }
-            return fallback;
+            return false;
+        }
+
+        private static string NormalizeDir(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path).TrimEnd('\\', '/');
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+            {
+                return path;
+            }
         }
 
         private static IEnumerable<string> GetManifestDirectories()
@@ -180,7 +182,6 @@ namespace SeaLauncher.Services
             AddCandidate(candidates, Path.Combine(local, "Epic Games", "EpicGamesLauncher", "Data", "Manifests"));
             AddCandidate(candidates, Path.Combine(common, "EpicGamesLauncher", "Data", "Manifests"));
 
-            // Standard locations, including custom launcher install locations.
             AddCandidate(candidates, Path.Combine(programFiles, "Epic Games", "Launcher", "Data", "Manifests"));
             AddCandidate(candidates, Path.Combine(programFilesX86, "Epic Games", "Launcher", "Data", "Manifests"));
             AddRegistryManifestLocations(candidates);
@@ -286,6 +287,65 @@ namespace SeaLauncher.Services
             }
         }
 
+        public static bool TryEnrichFromManifest(Game game)
+        {
+            if (game == null || game.Platform != Platform.Epic || string.IsNullOrWhiteSpace(game.InstallDir))
+            {
+                return false;
+            }
+
+            string targetDir = NormalizeDir(game.InstallDir);
+            foreach (string directory in GetManifestDirectories())
+            {
+                if (!Directory.Exists(directory))
+                {
+                    continue;
+                }
+
+                string[] manifests;
+                try
+                {
+                    manifests = Directory.GetFiles(directory, "*.item", SearchOption.TopDirectoryOnly);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    continue;
+                }
+
+                foreach (string manifest in manifests)
+                {
+                    try
+                    {
+                        Game candidate = Read(manifest);
+                        if (candidate == null || string.IsNullOrWhiteSpace(candidate.InstallDir))
+                        {
+                            continue;
+                        }
+
+                        if (!string.Equals(NormalizeDir(candidate.InstallDir), targetDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        game.Id = candidate.Id;
+                        game.Name = candidate.Name;
+                        game.OriginalName = candidate.OriginalName;
+                        game.InstallDir = candidate.InstallDir;
+                        game.ExePath = candidate.ExePath ?? game.ExePath;
+                        game.Arguments = candidate.Arguments;
+                        game.LaunchKey = candidate.LaunchKey;
+                        LaunchLog.Write("epic: recovered manifest metadata for " + game.Name + "; launchKey=" + (string.IsNullOrWhiteSpace(game.LaunchKey) ? "<missing>" : game.LaunchKey));
+                        return !string.IsNullOrWhiteSpace(game.LaunchKey);
+                    }
+                    catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is JsonException || ex is ArgumentException || ex is NotSupportedException)
+                    {
+                    }
+                }
+            }
+
+            return false;
+        }
+
         private static Game Read(string file)
         {
             var options = new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip };
@@ -305,7 +365,17 @@ namespace SeaLauncher.Services
                 string ns = Str(root, "CatalogNamespace");
                 string item = Str(root, "CatalogItemId");
 
+                string main = Str(root, "MainGameAppName");
+
                 if (string.IsNullOrWhiteSpace(appName) || string.IsNullOrWhiteSpace(location))
+                {
+                    return null;
+                }
+                if (!string.IsNullOrEmpty(main) && !string.Equals(main, appName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+                if (IsExcludedCategory(root))
                 {
                     return null;
                 }
@@ -338,13 +408,17 @@ namespace SeaLauncher.Services
                     }
                     catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
                     {
-                        // The Epic URI launch path below does not require an executable path.
                     }
                 }
 
                 if (string.IsNullOrWhiteSpace(name))
                 {
                     name = appName;
+                }
+
+                if (exePath == null)
+                {
+                    exePath = ExeFinder.Find(installDir, name);
                 }
 
                 string key = appName;
@@ -365,6 +439,28 @@ namespace SeaLauncher.Services
                     LaunchKey = key
                 };
             }
+        }
+
+        private static bool IsExcludedCategory(JsonElement root)
+        {
+            JsonElement categories;
+            if (!root.TryGetProperty("AppCategories", out categories) || categories.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (JsonElement entry in categories.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.String) continue;
+                string value = entry.GetString();
+                if (string.Equals(value, "engines", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(value, "plugins", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(value, "addons", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static string Str(JsonElement element, string property)

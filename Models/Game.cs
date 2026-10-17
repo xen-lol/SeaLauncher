@@ -8,7 +8,10 @@ namespace SeaLauncher.Models
         Epic = 1,
         Xbox = 2,
         Gog = 3,
-        Imported = 4
+        Ubisoft = 4,
+        Ea = 5,
+        BattleNet = 6,
+        Imported = 7
     }
 
     public enum NavFilter
@@ -20,6 +23,9 @@ namespace SeaLauncher.Models
         Epic,
         Xbox,
         Gog,
+        Ubisoft,
+        Ea,
+        BattleNet,
         Imported,
         Hidden
     }
@@ -58,6 +64,9 @@ namespace SeaLauncher.Models
                 case Platform.Epic: return "Epic Games";
                 case Platform.Xbox: return "Xbox";
                 case Platform.Gog: return "GOG";
+                case Platform.Ubisoft: return "Ubisoft Connect";
+                case Platform.Ea: return "EA app";
+                case Platform.BattleNet: return "Battle.net";
                 default: return "Imported";
             }
         }

@@ -16,4 +16,12 @@
     <Product>Sea Launcher</Product>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="Assets\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DiscordRichPresence" Version="1.*" />
+  </ItemGroup>
+
 </Project>

@@ -1,7 +1,7 @@
 Asset credits
 -------------
 
-- Steam, Epic Games, and GOG icons are from Simple Icons (CC0 1.0).
+- Steam, Epic Games, GOG, Ubisoft, EA, and Battle.net icons are from Simple Icons (CC0 1.0).
 - The Xbox icon is from Font Awesome Free 7.1.0 (CC BY 4.0), Copyright Fonticons, Inc.
 
 Platform and game names and logos belong to their respective owners. Sea Launcher

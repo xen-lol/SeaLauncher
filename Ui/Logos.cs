@@ -42,13 +42,16 @@ namespace SeaLauncher.Ui
                 case Platform.Epic: return LogoPaths.Epic;
                 case Platform.Xbox: return LogoPaths.Xbox;
                 case Platform.Gog: return LogoPaths.Gog;
+                case Platform.Ubisoft: return LogoPaths.Ubisoft;
+                case Platform.Ea: return LogoPaths.Ea;
+                case Platform.BattleNet: return LogoPaths.BattleNet;
                 default: return null;
             }
         }
 
         private static FrameworkElement RealMark(Geometry mark, Platform platform, double size)
         {
-            double fit = (platform == Platform.Epic || platform == Platform.Gog) ? 1.0 : 0.92;
+            double fit = (platform == Platform.Epic || platform == Platform.Gog || platform == Platform.Ea) ? 1.0 : 0.92;
 
             var path = new Shapes.Path();
             path.Data = mark;
