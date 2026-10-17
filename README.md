@@ -1,3 +1,9 @@
+New things coming soon:
+* New Themes, instead of just the sea the
+* Fix bugs
+* Add more platforms we support
+### Expect these in the next release or 4th release
+
 # Sea Launcher
 
 Sea Launcher is a Windows game launcher built with C#, WPF, and .NET 8. It brings your games together in one library so you can find and launch them without jumping between different launchers.
